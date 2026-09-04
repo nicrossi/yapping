@@ -1,0 +1,76 @@
+name: Yapping
+options:
+  bundleIdPrefix: com.nicorossi
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+targets:
+  Yapping:
+    type: application
+    platform: macOS
+    sources:
+      - path: Yapping
+        excludes:
+          - "Resources/Info.plist"
+          - "Resources/*.entitlements"
+    info:
+      path: Yapping/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Yapping
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSUIElement: true
+        LSMinimumSystemVersion: "26.0"
+        NSMicrophoneUsageDescription: Yapping listens while you hold the push-to-talk key so it can transcribe your speech.
+        NSSpeechRecognitionUsageDescription: Yapping transcribes your speech on-device.
+        NSHumanReadableCopyright: © 2026 Nico Rossi
+    entitlements:
+      path: Yapping/Resources/Yapping.entitlements
+      properties:
+        com.apple.security.device.audio-input: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nicorossi.yapping
+        PRODUCT_NAME: Yapping
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        COMBINE_HIDPI_IMAGES: YES
+  YappingTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: YappingTests
+    dependencies:
+      - target: Yapping
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nicorossi.yapping.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Yapping.app/Contents/MacOS/Yapping
+        BUNDLE_LOADER: $(TEST_HOST)
+schemes:
+  Yapping:
+    build:
+      targets:
+        Yapping: all
+        YappingTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - YappingTests

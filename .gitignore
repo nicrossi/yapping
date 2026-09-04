@@ -1,0 +1,19 @@
+# XcodeGen output — regenerate with `make gen`
+*.xcodeproj
+*.xcworkspace
+!project.yml
+
+# Build
+build/
+DerivedData/
+.build/
+.swiftpm/
+*.dSYM
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+
+# macOS / IDE
+.DS_Store
+.idea/
