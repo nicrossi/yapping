@@ -1,4 +1,4 @@
-@preconcurrency import AVFoundation
+import AVFoundation
 import Speech
 import os
 
@@ -24,7 +24,7 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
         let resolved = try await resolveLocale()
         let transcriber = makeTranscriber(locale: resolved)
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-            logger.info("Downloading speech assets for \(resolved.identifier, privacy: .public)")
+            logger.info("Ensuring speech assets for \(resolved.identifier, privacy: .public)")
             try await request.downloadAndInstall()
         }
     }
@@ -60,7 +60,7 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
                         var converter: AVAudioConverter?
                         for await chunk in audio {
                             if Task.isCancelled { break }
-                            let converted = try Self.convert(chunk.buffer, to: targetFormat, reusing: &converter)
+                            let converted = try AudioResampler.convert(chunk.buffer, to: targetFormat, reusing: &converter)
                             inputBuilder.yield(AnalyzerInput(buffer: converted))
                         }
                         inputBuilder.finish()
@@ -103,42 +103,5 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
             reportingOptions: [.volatileResults],
             attributeOptions: []
         )
-    }
-
-    private static func convert(
-        _ buffer: AVAudioPCMBuffer,
-        to format: AVAudioFormat,
-        reusing converter: inout AVAudioConverter?
-    ) throws -> AVAudioPCMBuffer {
-        if buffer.format == format { return buffer }
-        if converter == nil || converter?.inputFormat != buffer.format {
-            guard let made = AVAudioConverter(from: buffer.format, to: format) else {
-                throw TranscriptionError.noAudioFormat
-            }
-            converter = made
-        }
-        guard let converter else { throw TranscriptionError.noAudioFormat }
-
-        let ratio = format.sampleRate / buffer.format.sampleRate
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
-        guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else {
-            throw TranscriptionError.noAudioFormat
-        }
-
-        // The input block is invoked synchronously inside `convert`, so this is not actually concurrent.
-        nonisolated(unsafe) var consumed = false
-        var conversionError: NSError?
-        let status = converter.convert(to: out, error: &conversionError) { _, outStatus in
-            if consumed {
-                outStatus.pointee = .noDataNow
-                return nil
-            }
-            consumed = true
-            outStatus.pointee = .haveData
-            return buffer
-        }
-        if let conversionError { throw conversionError }
-        if status == .error { throw TranscriptionError.noAudioFormat }
-        return out
     }
 }

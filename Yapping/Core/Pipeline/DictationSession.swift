@@ -64,12 +64,16 @@ final class DictationSession {
     }
 
     /// Pre-loads the engine and audio stack so the first press is snappy.
-    func warmUp() async {
+    /// - Returns: the error if the engine could not be prepared (e.g. model download failed).
+    @discardableResult
+    func warmUp() async -> (any Error)? {
         audio.warmUp()
         do {
             try await engine.prepare()
+            return nil
         } catch {
             logger.error("Engine warm-up failed: \(error.localizedDescription, privacy: .public)")
+            return error
         }
     }
 

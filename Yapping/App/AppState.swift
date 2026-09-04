@@ -57,7 +57,11 @@ final class AppState {
 
     var statusLine: String {
         guard permissions.allGranted else { return "Needs permissions" }
-        return "\(settings.engineID.displayName) · \(settings.preferredLocale.localizedLanguageName)"
+        switch engineReadiness {
+        case .loading: return "Loading \(settings.engineID.displayName) model…"
+        case .failed(let message): return message
+        case .ready: return "\(settings.engineID.displayName) · \(settings.preferredLocale.localizedLanguageName)"
+        }
     }
 
     var cleanupUnavailableReason: String? {
@@ -66,11 +70,22 @@ final class AppState {
 
     // MARK: - Settings
 
+    enum EngineReadiness: Equatable { case ready, loading, failed(String) }
+    private(set) var engineReadiness: EngineReadiness = .loading
+    private var warmUpTask: Task<Void, Never>?
+
     /// Rebuilds the pipeline from current settings and warms it up.
     func applySettings() {
         session.engine = engine(for: settings.engineID)
         session.processor = processor(for: settings.processorID)
-        Task { await session.warmUp() }
+        warmUpTask?.cancel()
+        engineReadiness = .loading
+        warmUpTask = Task { [weak self] in
+            guard let self else { return }
+            let error = await session.warmUp()
+            guard !Task.isCancelled else { return }
+            engineReadiness = error.map { .failed($0.localizedDescription) } ?? .ready
+        }
     }
 
     func loadAvailableLocales() async {
@@ -87,8 +102,9 @@ final class AppState {
         case .speechAnalyzer:
             return SpeechAnalyzerEngine(locale: locale)
         case .parakeet:
+            // Parakeet holds ~600 MB of CoreML models; keep one instance alive across setting changes.
             if let cached = engines[.parakeet] { return cached }
-            let engine = SpeechAnalyzerEngine(locale: locale)  // TODO(phase 4): ParakeetEngine
+            let engine = ParakeetEngine(locale: locale)
             engines[.parakeet] = engine
             return engine
         }
