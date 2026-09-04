@@ -58,18 +58,27 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
 
                     let feeder = Task {
                         var converter: AVAudioConverter?
+                        var chunks = 0
+                        var frames: AVAudioFrameCount = 0
+                        var peak: Float = 0
                         for await chunk in audio {
                             if Task.isCancelled { break }
+                            peak = max(peak, chunk.buffer.normalizedLevel())
                             let converted = try AudioResampler.convert(chunk.buffer, to: targetFormat, reusing: &converter)
+                            chunks += 1
+                            frames += converted.frameLength
                             inputBuilder.yield(AnalyzerInput(buffer: converted))
                         }
                         inputBuilder.finish()
+                        let seconds = Double(frames) / targetFormat.sampleRate
+                        logger.info("Fed \(chunks, privacy: .public) chunks, \(seconds, format: .fixed(precision: 2), privacy: .public)s @ \(targetFormat.sampleRate, privacy: .public) Hz to analyzer; peak level \(peak, format: .fixed(precision: 2), privacy: .public); target format \(targetFormat, privacy: .public)")
                     }
 
                     let collector = Task { () -> String in
                         var finalized = ""
                         for try await result in transcriber.results {
                             let text = String(result.text.characters)
+                            logger.debug("result final=\(result.isFinal, privacy: .public): \(text, privacy: .public)")
                             if result.isFinal {
                                 finalized += text
                                 continuation.yield(TranscriptUpdate(text: finalized, isFinal: false))

@@ -43,7 +43,9 @@ final class AudioCapture {
 
         let (stream, continuation) = AsyncStream.makeStream(of: AudioChunk.self, bufferingPolicy: .bufferingNewest(256))
         let onLevel = self.onLevel
-        input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
+        // `@Sendable` keeps the closure nonisolated: it runs on the realtime audio thread, and a
+        // MainActor-inherited closure would trap on the runtime isolation check (SIGTRAP).
+        input.installTap(onBus: 0, bufferSize: 4096, format: format) { @Sendable buffer, _ in
             if let copy = buffer.deepCopy() {
                 continuation.yield(AudioChunk(buffer: copy))
             }

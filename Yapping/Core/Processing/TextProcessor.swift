@@ -25,5 +25,11 @@ struct ProcessingContext: Sendable {
 protocol TextProcessor: Sendable {
     var id: ProcessorID { get }
     func isAvailable() async -> Bool
+    /// Warm up models/sessions so the first `process` call is fast. Optional.
+    func prepare() async
     func process(_ text: String, context: ProcessingContext) async throws -> String
+}
+
+extension TextProcessor {
+    func prepare() async {}
 }

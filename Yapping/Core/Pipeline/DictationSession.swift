@@ -28,6 +28,8 @@ final class DictationSession {
     }
     /// Microphone level 0...1 while recording.
     private(set) var level: Float = 0
+    /// Loudest level seen during the current recording; used to tell "silence" from "no speech".
+    private var peakLevel: Float = 0
     /// Live transcript preview while recording/transcribing.
     private(set) var partialTranscript = ""
     private(set) var lastInsertedText = ""
@@ -47,6 +49,8 @@ final class DictationSession {
     /// Presses shorter than this are treated as accidental taps.
     static let minimumHold: Duration = .milliseconds(150)
     static let failureDisplayDuration: Duration = .seconds(2.5)
+    /// Peak level (0...1) below which a recording is considered dead silence.
+    static let silenceThreshold: Float = 0.02
 
     init(
         audio: AudioCapture,
@@ -59,7 +63,11 @@ final class DictationSession {
         self.processor = processor
         self.inserter = inserter
         audio.onLevel = { [weak self] value in
-            Task { @MainActor [weak self] in self?.level = value }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                level = value
+                peakLevel = max(peakLevel, value)
+            }
         }
     }
 
@@ -68,6 +76,7 @@ final class DictationSession {
     @discardableResult
     func warmUp() async -> (any Error)? {
         audio.warmUp()
+        await processor.prepare()
         do {
             try await engine.prepare()
             return nil
@@ -85,6 +94,7 @@ final class DictationSession {
         failureReset?.cancel()
         partialTranscript = ""
         level = 0
+        peakLevel = 0
         recordingStartedAt = .now
 
         let engine = self.engine
@@ -107,8 +117,13 @@ final class DictationSession {
 
                 let text = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else {
-                    logger.notice("Empty transcript; nothing to insert")
-                    finish()
+                    if peakLevel < Self.silenceThreshold {
+                        logger.notice("Empty transcript and no mic signal (peak \(self.peakLevel, privacy: .public))")
+                        fail("No sound from the microphone. Is it muted?")
+                    } else {
+                        logger.notice("Empty transcript; nothing to insert")
+                        finish()
+                    }
                     return
                 }
 
