@@ -9,8 +9,14 @@ struct MenuBarView: View {
             header
             Divider()
             if appState.permissions.allGranted {
+                @Bindable var settings = appState.settings
                 Label("Hold **Fn** to talk", systemImage: "hand.tap")
                     .foregroundStyle(.secondary)
+                Picker("Cleanup", selection: $settings.processorID) {
+                    ForEach(ProcessorID.allCases) { Text($0.displayName).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .font(.callout)
             } else {
                 PermissionsChecklist()
             }
@@ -30,7 +36,7 @@ struct MenuBarView: View {
                 .foregroundStyle(Color.accentColor)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Yapping").font(.headline)
-                Text(appState.permissions.allGranted ? "Ready" : "Needs permissions")
+                Text(appState.statusLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
