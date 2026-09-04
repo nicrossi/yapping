@@ -58,7 +58,7 @@ final class AudioCapture {
         }
         self.continuation = continuation
         isRunning = true
-        logger.info("Capture started: \(format.sampleRate, privacy: .public) Hz, \(format.channelCount, privacy: .public) ch")
+        logger.notice("Capture started: \(format.sampleRate, privacy: .public) Hz, \(format.channelCount, privacy: .public) ch")
         return stream
     }
 
@@ -69,7 +69,7 @@ final class AudioCapture {
         continuation?.finish()
         continuation = nil
         isRunning = false
-        logger.info("Capture stopped")
+        logger.notice("Capture stopped")
     }
 }
 

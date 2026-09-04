@@ -107,7 +107,7 @@ final class DictationSession {
 
                 let text = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else {
-                    logger.info("Empty transcript; nothing to insert")
+                    logger.notice("Empty transcript; nothing to insert")
                     finish()
                     return
                 }
@@ -119,7 +119,7 @@ final class DictationSession {
                 state = .inserting
                 try await inserter.insert(processed)
                 lastInsertedText = processed
-                logger.info("Inserted \(processed.count, privacy: .public) chars")
+                logger.notice("Inserted \(processed.count, privacy: .public) chars")
                 finish()
             } catch is CancellationError {
                 finish()

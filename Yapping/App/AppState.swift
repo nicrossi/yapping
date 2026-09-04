@@ -120,7 +120,11 @@ final class AppState {
     // MARK: - Permissions / hotkey
 
     func refreshPermissions() {
+        let previous = permissions
         permissions = permissionsService.current()
+        if permissions != previous {
+            logger.notice("Permissions: accessibility=\(self.permissions.accessibility, privacy: .public) microphone=\(String(describing: self.permissions.microphone), privacy: .public)")
+        }
         if permissions.accessibility, !hotkey.isRunning {
             hotkey.start()
         }

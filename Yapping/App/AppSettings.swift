@@ -11,6 +11,8 @@ final class AppSettings {
         static let locale = "localeIdentifier"
     }
 
+    static let defaultLocaleIdentifier = "en-US"
+
     var onChange: (() -> Void)?
 
     var engineID: EngineID {
@@ -21,7 +23,7 @@ final class AppSettings {
         didSet { persist(processorID.rawValue, Key.processor) }
     }
 
-    /// BCP-47 identifier, or `nil` to follow the system language.
+    /// BCP-47 identifier, or `nil` to follow the system language. Defaults to American English.
     var localeIdentifier: String? {
         didSet { persist(localeIdentifier, Key.locale) }
     }
@@ -36,7 +38,7 @@ final class AppSettings {
         self.defaults = defaults
         engineID = defaults.string(forKey: Key.engine).flatMap(EngineID.init(rawValue:)) ?? .speechAnalyzer
         processorID = defaults.string(forKey: Key.processor).flatMap(ProcessorID.init(rawValue:)) ?? .foundationModels
-        localeIdentifier = defaults.string(forKey: Key.locale)
+        localeIdentifier = defaults.string(forKey: Key.locale) ?? Self.defaultLocaleIdentifier
     }
 
     private func persist(_ value: String?, _ key: String) {

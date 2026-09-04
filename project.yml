@@ -12,7 +12,9 @@ settings:
     SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: "-"
+    # Self-signed "Yapping Dev" cert in the login keychain. Stable identity keeps the TCC
+    # Accessibility grant valid across rebuilds (ad-hoc "-" changes the cdhash every build).
+    CODE_SIGN_IDENTITY: "Yapping Dev"
     DEVELOPMENT_TEAM: ""
     ENABLE_HARDENED_RUNTIME: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES

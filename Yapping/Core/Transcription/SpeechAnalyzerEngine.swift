@@ -24,7 +24,7 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
         let resolved = try await resolveLocale()
         let transcriber = makeTranscriber(locale: resolved)
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-            logger.info("Ensuring speech assets for \(resolved.identifier, privacy: .public)")
+            logger.notice("Ensuring speech assets for \(resolved.identifier, privacy: .public)")
             try await request.downloadAndInstall()
         }
     }
@@ -84,7 +84,7 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
                     try await feeder.value
                     try await analyzer.finalizeAndFinishThroughEndOfInput()
                     let text = try await collector.value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    logger.info("Final transcript: \(text.count, privacy: .public) chars")
+                    logger.notice("Final transcript: \(text.count, privacy: .public) chars")
                     continuation.yield(TranscriptUpdate(text: text, isFinal: true))
                     continuation.finish()
                 } catch {

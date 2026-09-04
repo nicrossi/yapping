@@ -41,7 +41,7 @@ final class HotkeyMonitor {
         self.tap = tap
         self.runLoopSource = source
         isRunning = true
-        logger.info("Fn hotkey tap started")
+        logger.notice("Fn hotkey tap started")
         return true
     }
 

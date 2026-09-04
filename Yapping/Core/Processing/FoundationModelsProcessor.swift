@@ -56,7 +56,7 @@ struct FoundationModelsProcessor: TextProcessor {
         }
         let result = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !result.isEmpty else { return text }
-        logger.info("Cleaned \(text.count, privacy: .public) → \(result.count, privacy: .public) chars")
+        logger.notice("Cleaned \(text.count, privacy: .public) → \(result.count, privacy: .public) chars")
         return result
     }
 

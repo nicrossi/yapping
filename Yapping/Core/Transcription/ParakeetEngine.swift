@@ -70,7 +70,7 @@ actor ParakeetEngine: TranscriptionEngine {
             let models = try await AsrModels.downloadAndLoad(version: .v3)
             let manager = AsrManager(config: .default)
             try await manager.loadModels(models)
-            logger.info("Parakeet ready")
+            logger.notice("Parakeet ready")
             return manager
         }
         loading = task

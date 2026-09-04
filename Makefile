@@ -16,6 +16,7 @@ build: gen
 	$(XCB) build
 
 run: build stop
+	@sleep 1
 	open $(APP_PATH)
 
 stop:
