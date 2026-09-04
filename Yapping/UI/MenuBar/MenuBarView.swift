@@ -52,7 +52,7 @@ struct MenuBarView: View {
             Button("Quit") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(PressableButtonStyle())
         .font(.callout)
     }
 }
@@ -104,7 +104,22 @@ private struct PermissionRow: View {
             if !granted {
                 Button("Grant", action: action)
                     .controlSize(.small)
+                    .buttonStyle(PressableBorderedStyle())
             }
         }
+    }
+}
+
+/// Bordered look with press feedback, for the small "Grant" buttons.
+struct PressableBorderedStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(Color.accentColor.opacity(configuration.isPressed ? 0.85 : 1), in: Capsule())
+            .foregroundStyle(.white)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(Motion.press, value: configuration.isPressed)
     }
 }

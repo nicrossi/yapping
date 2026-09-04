@@ -11,6 +11,7 @@ struct YappingApp: App {
         } label: {
             Image(systemName: appState.menuBarSymbol)
                 .symbolRenderingMode(.hierarchical)
+                .contentTransition(.symbolEffect(.replace))
         }
         .menuBarExtraStyle(.window)
 

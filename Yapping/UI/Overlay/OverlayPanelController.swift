@@ -7,10 +7,15 @@ import SwiftUI
 final class OverlayPanelController {
     private let panel: NSPanel
     private let session: DictationSession
+    private let presentation = OverlayPresentation()
     private var hideTask: Task<Void, Never>?
+    private var orderOutTask: Task<Void, Never>?
 
-    private static let size = NSSize(width: 340, height: 60)
-    private static let bottomMargin: CGFloat = 96
+    // Extra room around the 44pt pill so scale/offset transitions never clip.
+    private static let size = NSSize(width: 380, height: 72)
+    private static let bottomMargin: CGFloat = 88
+    /// Slightly longer than `Motion.exit` so the fade completes before the window disappears.
+    private static let orderOutDelay: Duration = .milliseconds(140)
 
     init(session: DictationSession) {
         self.session = session
@@ -30,7 +35,9 @@ final class OverlayPanelController {
         panel.hidesOnDeactivate = false
         panel.isMovable = false
         panel.animationBehavior = .utilityWindow
-        panel.contentView = NSHostingView(rootView: OverlayView().environment(session))
+        panel.contentView = NSHostingView(
+            rootView: OverlayView().environment(session).environment(presentation)
+        )
         self.panel = panel
 
         session.onStateChange = { [weak self] state in
@@ -56,24 +63,24 @@ final class OverlayPanelController {
     }
 
     private func show() {
-        guard !panel.isVisible else { return }
-        position()
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.15
-            panel.animator().alphaValue = 1
+        orderOutTask?.cancel()
+        orderOutTask = nil
+        if !panel.isVisible {
+            position()
+            panel.orderFrontRegardless()
         }
+        // The SwiftUI content animates in (opacity + scale + rise); the window itself stays opaque.
+        presentation.isVisible = true
     }
 
     private func hide() {
-        guard panel.isVisible else { return }
-        NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.18
-            panel.animator().alphaValue = 0
-        }, completionHandler: { [panel] in
-            MainActor.assumeIsolated { panel.orderOut(nil) }
-        })
+        guard panel.isVisible, presentation.isVisible else { return }
+        presentation.isVisible = false
+        orderOutTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.orderOutDelay)
+            guard !Task.isCancelled else { return }
+            self?.panel.orderOut(nil)
+        }
     }
 
     /// Bottom-center of the screen containing the mouse (usually where the user is typing).
