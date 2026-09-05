@@ -43,6 +43,7 @@ final class AppSettings {
 
     private func persist(_ value: String?, _ key: String) {
         if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+        defaults.synchronize()  // flush now so a hard quit can't lose the change
         onChange?()
     }
 }
