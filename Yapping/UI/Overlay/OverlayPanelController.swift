@@ -50,10 +50,11 @@ final class OverlayPanelController {
         switch state {
         case .idle:
             hide()
-        case .failed:
+        case .failed, .done:
             show()
+            let linger = state == .done ? DictationSession.doneDisplayDuration : DictationSession.failureDisplayDuration
             hideTask = Task { [weak self] in
-                try? await Task.sleep(for: DictationSession.failureDisplayDuration)
+                try? await Task.sleep(for: linger)
                 guard !Task.isCancelled else { return }
                 self?.hide()
             }

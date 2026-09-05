@@ -32,6 +32,11 @@ Xcode (Settings → Accounts) and set `DEVELOPMENT_TEAM` / `CODE_SIGN_IDENTITY: 
 | Apple Speech (`SpeechAnalyzer`) | on-device, system model | ~30 locales (EN/ES/FR/DE/IT/PT/JA/KO/ZH) | default; streams partials while you talk |
 | Parakeet TDT 0.6B v3 (FluidAudio) | on-device CoreML | 25 European langs + JA | ~600 MB download on first select, into `~/Library/Application Support/FluidAudio/Models` |
 
+## Brand
+Glass-wave identity: violet `#7C5CFF` → pink `#FF5CA8` gradient squircle, white five-bar wave.
+Tokens live in `Yapping/UI/Brand.swift` (colors, wordmark, glyph, playful copy).
+Icon and menu bar glyphs are generated, not hand-drawn: `make icons` (see `Tools/iconsmith.swift`).
+
 ## Debugging
 ```sh
 /usr/bin/log stream --info --predicate 'subsystem == "com.nicorossi.yapping"'

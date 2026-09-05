@@ -9,15 +9,33 @@ struct YappingApp: App {
             MenuBarView()
                 .environment(appState)
         } label: {
-            Image(systemName: appState.menuBarSymbol)
-                .symbolRenderingMode(.hierarchical)
-                .contentTransition(.symbolEffect(.replace))
+            MenuBarLabel(state: appState.menuBarState)
         }
         .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView()
                 .environment(appState)
+        }
+    }
+}
+
+/// Template glyphs for the menu bar. Custom wave mark when idle/active, SF Symbols for edge states.
+struct MenuBarLabel: View {
+    let state: AppState.MenuBarState
+
+    var body: some View {
+        switch state {
+        case .idle:
+            Image("MenuBarIdle")
+        case .active:
+            Image("MenuBarActive")
+        case .busy:
+            Image(systemName: "ellipsis.circle")
+                .symbolRenderingMode(.hierarchical)
+        case .attention:
+            Image(systemName: "exclamationmark.circle")
+                .symbolRenderingMode(.hierarchical)
         }
     }
 }

@@ -38,9 +38,25 @@ struct SettingsView: View {
             Section("Permissions") {
                 PermissionsChecklist()
             }
+            Section {
+                HStack(spacing: 12) {
+                    WaveGlyph(size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Wordmark(size: 18)
+                        Text("Push-to-talk dictation. Everything stays on this Mac.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 4)
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 420)
+        .frame(width: 460, height: 500)
         .task { await appState.loadAvailableLocales() }
         .onAppear { appState.startPermissionsPolling() }
         .onDisappear { appState.stopPermissionsPolling() }

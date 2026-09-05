@@ -46,21 +46,23 @@ final class AppState {
 
     // MARK: - Derived UI state
 
-    var menuBarSymbol: String {
+    enum MenuBarState { case idle, active, busy, attention }
+
+    var menuBarState: MenuBarState {
         switch session.state {
-        case .recording: "waveform.circle.fill"
-        case .transcribing, .processing, .inserting: "ellipsis.circle"
-        case .failed: "exclamationmark.circle"
-        case .idle: permissions.allGranted ? "waveform" : "waveform.badge.exclamationmark"
+        case .recording, .done: .active
+        case .transcribing, .processing, .inserting: .busy
+        case .failed: .attention
+        case .idle: permissions.allGranted ? .idle : .attention
         }
     }
 
     var statusLine: String {
-        guard permissions.allGranted else { return "Needs permissions" }
+        guard permissions.allGranted else { return Copy.needsPermissions }
         switch engineReadiness {
-        case .loading: return "Loading \(settings.engineID.displayName) model…"
+        case .loading: return Copy.loadingModel
         case .failed(let message): return message
-        case .ready: return "\(settings.engineID.displayName) · \(settings.preferredLocale.localizedLanguageName)"
+        case .ready: return "\(Copy.ready) · \(settings.engineID.displayName) · \(settings.preferredLocale.localizedLanguageName)"
         }
     }
 

@@ -73,11 +73,14 @@ struct OverlayView: View {
         switch session.state {
         case .recording:
             Image(systemName: "mic.fill")
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Brand.gradient)
         case .transcribing, .processing, .inserting:
             Image(systemName: "sparkles")
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Brand.gradient)
                 .symbolEffect(.variableColor.iterative.dimInactiveLayers, options: .repeating)
+        case .done:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Brand.gradient)
         case .failed:
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
@@ -105,11 +108,12 @@ struct OverlayView: View {
     private var caption: String {
         switch session.state {
         case .recording:
-            session.partialTranscript.isEmpty ? "Listening…" : session.partialTranscript
+            session.partialTranscript.isEmpty ? Copy.listening : session.partialTranscript
         case .transcribing:
-            session.partialTranscript.isEmpty ? "Transcribing…" : session.partialTranscript
-        case .processing: "Cleaning up…"
-        case .inserting: "Inserting…"
+            session.partialTranscript.isEmpty ? Copy.transcribing : session.partialTranscript
+        case .processing: Copy.processing
+        case .inserting: Copy.inserting
+        case .done: Copy.done
         case .failed(let message): message
         case .idle: ""
         }
@@ -122,6 +126,7 @@ struct OverlayView: View {
             session.partialTranscript.isEmpty ? "waiting" : "transcript"
         case .processing: "processing"
         case .inserting: "inserting"
+        case .done: "done"
         case .failed: "failed"
         case .idle: "idle"
         }
@@ -155,7 +160,7 @@ struct LevelBars: View {
         HStack(alignment: .center, spacing: 3) {
             ForEach(weights.indices, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(Color.accentColor)
+                    .fill(Brand.gradientHorizontal)
                     .frame(width: 3, height: height(for: i))
             }
         }

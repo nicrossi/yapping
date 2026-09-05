@@ -10,8 +10,12 @@ struct MenuBarView: View {
             Divider()
             if appState.permissions.allGranted {
                 @Bindable var settings = appState.settings
-                Label("Hold **Fn** to talk", systemImage: "hand.tap")
-                    .foregroundStyle(.secondary)
+                Label {
+                    Text(.init(Copy.holdHint))
+                } icon: {
+                    Image(systemName: "hand.tap")
+                }
+                .foregroundStyle(.secondary)
                 Picker("Cleanup", selection: $settings.processorID) {
                     ForEach(ProcessorID.allCases) { Text($0.displayName).tag($0) }
                 }
@@ -30,15 +34,14 @@ struct MenuBarView: View {
     }
 
     private var header: some View {
-        HStack {
-            Image(systemName: "waveform")
-                .font(.title2)
-                .foregroundStyle(Color.accentColor)
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Yapping").font(.headline)
+        HStack(spacing: 10) {
+            WaveGlyph(size: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Wordmark(size: 15)
                 Text(appState.statusLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             Spacer()
         }

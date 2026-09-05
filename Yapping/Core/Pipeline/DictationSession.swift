@@ -13,11 +13,13 @@ final class DictationSession {
         case transcribing
         case processing
         case inserting
+        /// Brief confirmation shown after a successful insert.
+        case done
         case failed(String)
 
         var isBusy: Bool {
             switch self {
-            case .idle, .failed: false
+            case .idle, .failed, .done: false
             default: true
             }
         }
@@ -49,6 +51,7 @@ final class DictationSession {
     /// Presses shorter than this are treated as accidental taps.
     static let minimumHold: Duration = .milliseconds(150)
     static let failureDisplayDuration: Duration = .seconds(2.5)
+    static let doneDisplayDuration: Duration = .milliseconds(650)
     /// Peak level (0...1) below which a recording is considered dead silence.
     static let silenceThreshold: Float = 0.02
 
@@ -119,7 +122,7 @@ final class DictationSession {
                 guard !text.isEmpty else {
                     if peakLevel < Self.silenceThreshold {
                         logger.notice("Empty transcript and no mic signal (peak \(self.peakLevel, privacy: .public))")
-                        fail("No sound from the microphone. Is it muted?")
+                        fail(Copy.micMuted)
                     } else {
                         logger.notice("Empty transcript; nothing to insert")
                         finish()
@@ -135,7 +138,7 @@ final class DictationSession {
                 try await inserter.insert(processed)
                 lastInsertedText = processed
                 logger.notice("Inserted \(processed.count, privacy: .public) chars")
-                finish()
+                celebrate()
             } catch is CancellationError {
                 finish()
             } catch {
@@ -185,6 +188,20 @@ final class DictationSession {
         level = 0
         partialTranscript = ""
         state = .idle
+    }
+
+    /// Flash `.done`, then return to idle unless a new press has started.
+    private func celebrate() {
+        audio.stop()
+        recordingStartedAt = nil
+        level = 0
+        partialTranscript = ""
+        state = .done
+        failureReset = Task { [weak self] in
+            try? await Task.sleep(for: Self.doneDisplayDuration)
+            guard !Task.isCancelled, self?.state == .done else { return }
+            self?.state = .idle
+        }
     }
 
     private func fail(_ message: String) {
