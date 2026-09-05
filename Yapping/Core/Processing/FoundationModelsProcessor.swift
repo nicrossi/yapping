@@ -130,7 +130,7 @@ enum DictationHeuristics {
     ]
     /// Phrases that signal a self-correction the model should resolve.
     static let corrections: [String] = [
-        "no wait", "wait no", "i mean", "scratch that", "actually no", "no,", "sorry,", "make that", "rather,",
+        "no wait", "wait no", "i mean", "scratch that", "actually no", "make that", "or rather",
     ]
 
     static func needsCleanup(_ text: String) -> Bool {

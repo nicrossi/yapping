@@ -37,7 +37,7 @@ final class AppSettings {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         engineID = defaults.string(forKey: Key.engine).flatMap(EngineID.init(rawValue:)) ?? .speechAnalyzer
-        processorID = defaults.string(forKey: Key.processor).flatMap(ProcessorID.init(rawValue:)) ?? .foundationModels
+        processorID = defaults.string(forKey: Key.processor).flatMap(ProcessorID.init(rawValue:)) ?? .quick
         localeIdentifier = defaults.string(forKey: Key.locale) ?? Self.defaultLocaleIdentifier
     }
 

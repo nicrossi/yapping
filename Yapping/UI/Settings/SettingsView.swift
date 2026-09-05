@@ -25,6 +25,9 @@ struct SettingsView: View {
                         Text(processor.displayName).tag(processor)
                     }
                 }
+                Text(settings.processorID.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 if settings.processorID == .foundationModels, let reason = appState.cleanupUnavailableReason {
                     Label(reason, systemImage: "exclamationmark.triangle")
                         .font(.caption)
@@ -33,7 +36,7 @@ struct SettingsView: View {
             } header: {
                 Text("Text cleanup")
             } footer: {
-                Text("Apple Intelligence cleanup removes filler words and fixes punctuation, entirely on-device.")
+                Text("Everything runs on this Mac. Nothing is sent anywhere.")
             }
             Section("Permissions") {
                 PermissionsChecklist()

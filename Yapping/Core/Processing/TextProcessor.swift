@@ -2,6 +2,7 @@ import Foundation
 
 enum ProcessorID: String, CaseIterable, Codable, Sendable, Identifiable {
     case passthrough
+    case quick
     case foundationModels
 
     var id: String { rawValue }
@@ -9,7 +10,16 @@ enum ProcessorID: String, CaseIterable, Codable, Sendable, Identifiable {
     var displayName: String {
         switch self {
         case .passthrough: "Raw transcript"
-        case .foundationModels: "Apple Intelligence cleanup"
+        case .quick: "Quick cleanup"
+        case .foundationModels: "Apple Intelligence (deep, slower)"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .passthrough: "Exactly what the speech engine heard."
+        case .quick: "Instant. Drops ums and uhs, fixes stutters, punctuation and capitalization."
+        case .foundationModels: "On-device language model rewrites the text. Several seconds on M1."
         }
     }
 }

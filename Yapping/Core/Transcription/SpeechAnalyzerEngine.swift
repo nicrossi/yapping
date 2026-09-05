@@ -80,15 +80,22 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
 
                     let collector = Task { () -> String in
                         var finalized = ""
+                        var volatile = ""
                         for try await result in transcriber.results {
                             let text = String(result.text.characters)
                             logger.debug("result final=\(result.isFinal, privacy: .public): \(text, privacy: .public)")
                             if result.isFinal {
                                 finalized += text
-                                continuation.yield(TranscriptUpdate(text: finalized, isFinal: false))
+                                volatile = ""
                             } else {
-                                continuation.yield(TranscriptUpdate(text: finalized + text, isFinal: false))
+                                volatile = text
                             }
+                            continuation.yield(TranscriptUpdate(text: finalized + volatile, isFinal: false))
+                        }
+                        if !volatile.isEmpty {
+                            // The analyzer ended with an unfinalized tail; keep it rather than lose words.
+                            logger.notice("Keeping unfinalized tail (\(volatile.count, privacy: .public) chars)")
+                            finalized += volatile
                         }
                         return finalized
                     }

@@ -115,6 +115,7 @@ final class AppState {
     private func processor(for id: ProcessorID) -> any TextProcessor {
         switch id {
         case .passthrough: PassthroughProcessor()
+        case .quick: QuickCleanupProcessor()
         case .foundationModels: FoundationModelsProcessor()
         }
     }
