@@ -6,11 +6,25 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var settings = appState.settings
         Form {
-            Section("Dictation") {
-                Picker("Language", selection: $settings.localeIdentifier) {
-                    Text("System (\(Locale.current.localizedLanguageName))").tag(String?.none)
-                    ForEach(appState.availableLocales, id: \.self) { id in
-                        Text(Locale(identifier: id).localizedLanguageName).tag(String?.some(id))
+            Section {
+                if appState.availableLocales.isEmpty {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Loading languages…").foregroundStyle(.secondary)
+                    }
+                } else {
+                    Picker("Language", selection: $settings.localeIdentifier) {
+                        Text("Follow System (\(appState.resolvedLanguageName))").tag(String?.none)
+                        Divider()
+                        ForEach(appState.availableLocales, id: \.self) { id in
+                            Text(Locale(identifier: id).localizedLanguageName).tag(String?.some(id))
+                        }
+                    }
+                    if !appState.isSelectedLanguageInstalled {
+                        Label("The \(appState.resolvedLanguageName) model downloads on first use.",
+                              systemImage: "arrow.down.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 Picker("Speech engine", selection: $settings.engineID) {
@@ -18,6 +32,10 @@ struct SettingsView: View {
                         Text(engine.displayName).tag(engine)
                     }
                 }
+            } header: {
+                Text("Dictation")
+            } footer: {
+                Text("Speech is recognized on-device in the selected language. Apple offers regional variants only; pick the closest.")
             }
             Section {
                 Picker("Cleanup", selection: $settings.processorID) {

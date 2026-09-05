@@ -14,6 +14,8 @@ final class AppState {
     private(set) var permissions = PermissionsStatus()
     /// BCP-47 identifiers the active speech engine supports, for the language picker.
     private(set) var availableLocales: [String] = []
+    /// Which of those already have their model downloaded.
+    private(set) var installedLocales: Set<String> = []
 
     private var overlay: OverlayPanelController?
     private var engines: [EngineID: any TranscriptionEngine] = [:]
@@ -42,6 +44,7 @@ final class AppState {
         applySettings()
         refreshPermissions()
         bootstrapHotkey()
+        Task { await loadAvailableLocales() }
     }
 
     // MARK: - Derived UI state
@@ -91,10 +94,29 @@ final class AppState {
     }
 
     func loadAvailableLocales() async {
-        let locales = await SpeechAnalyzerEngine.supportedLocales()
-        availableLocales = locales
+        let supported = await SpeechAnalyzerEngine.supportedLocales()
+        let installed = await SpeechAnalyzerEngine.installedLocales()
+        availableLocales = supported
             .map { $0.identifier(.bcp47) }
             .sorted { Locale(identifier: $0).localizedLanguageName < Locale(identifier: $1).localizedLanguageName }
+        installedLocales = Set(installed.map { $0.identifier(.bcp47) })
+    }
+
+    /// The supported locale the current selection actually resolves to (e.g. system es-AR → es-MX).
+    var resolvedLanguageName: String {
+        resolvedLocale()?.localizedLanguageName ?? settings.preferredLocale.localizedLanguageName
+    }
+
+    /// False when the resolved model still needs to download on first use.
+    var isSelectedLanguageInstalled: Bool {
+        guard !installedLocales.isEmpty, let resolved = resolvedLocale() else { return true }
+        return installedLocales.contains(resolved.identifier(.bcp47))
+    }
+
+    private func resolvedLocale() -> Locale? {
+        guard !availableLocales.isEmpty else { return nil }
+        let supported = availableLocales.map(Locale.init(identifier:))
+        return LocaleResolver.resolve(preferred: settings.preferredLocale, from: supported)
     }
 
     private func engine(for id: EngineID) -> any TranscriptionEngine {

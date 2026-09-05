@@ -20,6 +20,10 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
         await SpeechTranscriber.supportedLocales
     }
 
+    static func installedLocales() async -> [Locale] {
+        await SpeechTranscriber.installedLocales
+    }
+
     private let prepared = OSAllocatedUnfairLock(initialState: false)
 
     func prepare() async throws {
