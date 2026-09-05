@@ -1,4 +1,4 @@
-# Yapping
+# Yapping [Vibe-Coded]
 
 Push-to-talk dictation for macOS. Hold **Fn**, talk, release. Cleaned-up text lands wherever your cursor already is, in any app.
 
