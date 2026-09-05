@@ -1,6 +1,12 @@
-# Yapping [Vibe-Coded]
+<p align="center">
+  <img src="Yapping/Resources/Assets.xcassets/AppIcon.appiconset/icon_512.png" width="140" alt="Yapping app icon">
+</p>
 
-Push-to-talk dictation for macOS. Hold **Fn**, talk, release. Cleaned-up text lands wherever your cursor already is, in any app.
+<h1 align="center">Yapping <sub><sup>[Vibe-Coded]</sup></sub></h1>
+
+<p align="center">Push-to-talk dictation for macOS. Hold <b>Fn</b>, talk, release.<br>Cleaned-up text lands wherever your cursor already is, in any app.</p>
+
+Everything runs on your Mac. No account, no network, no telemetry. It is a local-first take on Wispr Flow: the same hold-a-key-and-talk loop, but the audio never leaves the machine.
 
 Everything runs on your Mac. No account, no network, no telemetry. It is a local-first take on Wispr Flow: the same hold-a-key-and-talk loop, but the audio never leaves the machine.
 
