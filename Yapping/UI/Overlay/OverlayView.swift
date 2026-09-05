@@ -120,3 +120,35 @@ struct PressableButtonStyle: ButtonStyle {
             .animation(Motion.press, value: configuration.isPressed)
     }
 }
+
+/// Menu-row action button: a rounded highlight that fills on hover and deepens on press.
+struct MenuActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        StyleContent(configuration: configuration)
+    }
+
+    struct StyleContent: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color.primary.opacity(fillOpacity))
+                )
+                .scaleEffect(configuration.isPressed ? 0.98 : 1)
+                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .onHover { hovering = $0 }
+                .animation(Motion.press, value: hovering)
+                .animation(Motion.press, value: configuration.isPressed)
+        }
+
+        private var fillOpacity: Double {
+            if configuration.isPressed { return 0.15 }
+            return hovering ? 0.08 : 0
+        }
+    }
+}

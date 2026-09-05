@@ -49,18 +49,26 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack {
-            Button("Settings…") { openSettings() }
-                .keyboardShortcut(",")
+            Button("Settings") {
+                // Accessory apps must activate first, or openSettings() no-ops. Let the menu
+                // window dismiss first, then bring the app forward and show Settings.
+                DispatchQueue.main.async {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openSettings()
+                }
+            }
+            .keyboardShortcut(",")
             Spacer()
-            Button("Quit yapping") {
+            Button("Quit") {
                 appState.shutDown()
                 // Dismiss the menu window first, then terminate, so the quit is reliable.
                 DispatchQueue.main.async { NSApp.terminate(nil) }
             }
             .keyboardShortcut("q")
         }
-        .buttonStyle(PressableButtonStyle())
+        .buttonStyle(MenuActionButtonStyle())
         .font(.callout)
+        .padding(.horizontal, -9)  // let the hover highlight extend to the row edges
     }
 }
 
@@ -117,16 +125,32 @@ private struct PermissionRow: View {
     }
 }
 
-/// Bordered look with press feedback, for the small "Grant" buttons.
+/// Bordered look with hover + press feedback, for the small "Grant" buttons.
 struct PressableBorderedStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(Color.accentColor.opacity(configuration.isPressed ? 0.85 : 1), in: Capsule())
-            .foregroundStyle(.white)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(Motion.press, value: configuration.isPressed)
+        StyleContent(configuration: configuration)
+    }
+
+    struct StyleContent: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Color.accentColor.opacity(opacity), in: Capsule())
+                .foregroundStyle(.white)
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .onHover { hovering = $0 }
+                .animation(Motion.press, value: hovering)
+                .animation(Motion.press, value: configuration.isPressed)
+        }
+
+        private var opacity: Double {
+            if configuration.isPressed { return 0.8 }
+            return hovering ? 1 : 0.9
+        }
     }
 }
