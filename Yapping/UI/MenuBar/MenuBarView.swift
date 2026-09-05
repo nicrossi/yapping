@@ -52,8 +52,12 @@ struct MenuBarView: View {
             Button("Settings…") { openSettings() }
                 .keyboardShortcut(",")
             Spacer()
-            Button("Quit") { NSApplication.shared.terminate(nil) }
-                .keyboardShortcut("q")
+            Button("Quit yapping") {
+                appState.shutDown()
+                // Dismiss the menu window first, then terminate, so the quit is reliable.
+                DispatchQueue.main.async { NSApp.terminate(nil) }
+            }
+            .keyboardShortcut("q")
         }
         .buttonStyle(PressableButtonStyle())
         .font(.callout)

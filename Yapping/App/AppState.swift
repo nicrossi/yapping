@@ -149,6 +149,16 @@ final class AppState {
         permissionsPollTask = nil
     }
 
+    /// Tear everything down before the process exits: stop the global tap and the mic,
+    /// cancel background tasks. Called from Quit.
+    func shutDown() {
+        hotkey.stop()
+        session.cancel()
+        stopPermissionsPolling()
+        hotkeyBootstrapTask?.cancel()
+        logger.notice("Shutting down")
+    }
+
     /// Keep trying to start the Fn tap until Accessibility is granted (user may grant it later).
     private func bootstrapHotkey() {
         guard !hotkey.isRunning else { return }
