@@ -4,6 +4,12 @@ import os
 
 /// Orchestrates one push-to-talk cycle:
 /// key down → capture + stream to engine → key up → finalize → process → insert.
+///
+/// Overlapping presses are handled by a generation counter. A press that arrives while a previous
+/// dictation is *finalizing* (transcribing/processing/inserting) does not cancel it — the old
+/// pipeline still runs to completion and inserts its text — while the new recording starts
+/// immediately and takes over the UI and microphone. Only the newest generation may mutate the
+/// visible state or touch the audio engine.
 @MainActor
 @Observable
 final class DictationSession {
@@ -48,8 +54,11 @@ final class DictationSession {
     private let audio: AudioCapture
     private var pipeline: Task<Void, Never>?
     private var failureReset: Task<Void, Never>?
+    private var autoStopTask: Task<Void, Never>?
     private var recordingStartedAt: ContinuousClock.Instant?
     private var releasedAt: ContinuousClock.Instant?
+    /// Incremented for each new recording; only the current generation owns the UI and mic.
+    private var generation = 0
     private let logger = Logger(subsystem: "com.nicorossi.yapping", category: "session")
 
     /// Presses shorter than this are treated as accidental taps.
@@ -58,6 +67,8 @@ final class DictationSession {
     static let doneDisplayDuration: Duration = .milliseconds(650)
     /// Peak level (0...1) below which a recording is considered dead silence.
     static let silenceThreshold: Float = 0.15  // ≈ -42 dBFS; real speech peaks 0.4+
+    /// Safety backstop: auto-finalize a recording that somehow never receives a key release.
+    static let maxRecordingDuration: Duration = .seconds(150)
 
     init(
         audio: AudioCapture,
@@ -96,11 +107,24 @@ final class DictationSession {
     }
 
     func beginRecording() {
-        if state.isBusy {
-            logger.info("Press while busy (\(String(describing: self.state), privacy: .public)); cancelling in-flight work")
-            cancel()
+        switch state {
+        case .recording:
+            // Still capturing (a missed release or double-down): it owns the mic, so discard it.
+            logger.info("Press while still recording; discarding the previous capture")
+            pipeline?.cancel()
+            audio.stop()
+        case .transcribing, .processing, .inserting:
+            // Finalizing: leave it running so it still inserts. It no longer owns the mic.
+            logger.info("Press during finalize; queuing new recording behind it")
+        case .idle, .done, .failed:
+            break
         }
+
         failureReset?.cancel()
+        autoStopTask?.cancel()
+        generation += 1
+        let gen = generation
+
         partialTranscript = ""
         level = 0
         peakLevel = 0
@@ -114,7 +138,8 @@ final class DictationSession {
                 let pressedAt = ContinuousClock.now
                 // Mic first so the user's first word isn't lost; prepare() is a no-op once warmed.
                 let stream = try audio.start()
-                state = .recording
+                setState(.recording, gen: gen)
+                scheduleAutoStop(gen: gen)
                 let captureDelay = ContinuousClock.now - pressedAt
                 try await engine.prepare()
 
@@ -122,7 +147,7 @@ final class DictationSession {
                 for try await update in engine.transcribe(stream) {
                     if update.isFinal {
                         finalText = update.text
-                    } else {
+                    } else if gen == generation {
                         partialTranscript = update.text
                     }
                 }
@@ -132,33 +157,33 @@ final class DictationSession {
 
                 let text = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else {
-                    if peakLevel < Self.silenceThreshold {
+                    if peakLevel < Self.silenceThreshold, gen == generation {
                         logger.notice("Empty transcript and no mic signal (peak \(self.peakLevel, privacy: .public))")
-                        fail(Copy.micMuted)
+                        fail(Copy.micMuted, gen: gen)
                     } else {
                         logger.notice("Empty transcript; nothing to insert")
-                        finish()
+                        finish(gen: gen)
                     }
                     return
                 }
 
-                state = .processing
+                setState(.processing, gen: gen)
                 let processed = await runProcessor(on: text)
                 try Task.checkCancellation()
                 let processedAt = ContinuousClock.now
 
-                state = .inserting
+                setState(.inserting, gen: gen)
                 try await inserter.insert(processed)
                 let insertedAt = ContinuousClock.now
                 lastInsertedText = processed
                 logger.notice(
                     "Inserted \(processed.count, privacy: .public) chars · capture-start \(Self.ms(captureDelay), privacy: .public)ms · release→final \(Self.ms(finalizeDelay), privacy: .public)ms · cleanup \(Self.ms(processedAt - finalAt), privacy: .public)ms · insert \(Self.ms(insertedAt - processedAt), privacy: .public)ms · release→pasted \(Self.ms(self.releasedAt.map { insertedAt - $0 }), privacy: .public)ms"
                 )
-                celebrate()
+                celebrate(gen: gen)
             } catch is CancellationError {
-                finish()
+                finish(gen: gen)
             } catch {
-                fail(error.localizedDescription)
+                fail(error.localizedDescription, gen: gen)
             }
         }
     }
@@ -166,6 +191,7 @@ final class DictationSession {
     func endRecording() {
         guard let startedAt = recordingStartedAt else { return }
         recordingStartedAt = nil
+        autoStopTask?.cancel()
         let held = ContinuousClock.now - startedAt
         if held < Self.minimumHold {
             logger.info("Hold too short (\(held, privacy: .public)); ignoring")
@@ -178,11 +204,17 @@ final class DictationSession {
         audio.stop()  // ends the audio stream → engine finalizes
     }
 
+    /// Cancels the current recording/pipeline and returns to idle. Detached older pipelines
+    /// (queued behind this one) are left to finish inserting.
     func cancel() {
         pipeline?.cancel()
         pipeline = nil
+        autoStopTask?.cancel()
         audio.stop()
-        finish()
+        recordingStartedAt = nil
+        level = 0
+        partialTranscript = ""
+        state = .idle
     }
 
     // MARK: - Private
@@ -190,6 +222,22 @@ final class DictationSession {
     private static func ms(_ d: Duration?) -> Int {
         guard let d else { return -1 }
         return Int(d / .milliseconds(1))
+    }
+
+    /// Only the current generation may change the visible state.
+    private func setState(_ newState: State, gen: Int) {
+        guard gen == generation else { return }
+        state = newState
+    }
+
+    private func scheduleAutoStop(gen: Int) {
+        autoStopTask?.cancel()
+        autoStopTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.maxRecordingDuration)
+            guard let self, !Task.isCancelled, gen == generation, state == .recording else { return }
+            logger.notice("Auto-stopping recording at max duration")
+            endRecording()
+        }
     }
 
     private func runProcessor(on text: String) async -> String {
@@ -204,8 +252,10 @@ final class DictationSession {
         }
     }
 
-    private func finish() {
+    private func finish(gen: Int) {
+        guard gen == generation else { return }  // a detached older pipeline: leave UI/mic alone
         audio.stop()
+        autoStopTask?.cancel()
         recordingStartedAt = nil
         level = 0
         partialTranscript = ""
@@ -213,8 +263,10 @@ final class DictationSession {
     }
 
     /// Flash `.done`, then return to idle unless a new press has started.
-    private func celebrate() {
+    private func celebrate(gen: Int) {
+        guard gen == generation else { return }
         audio.stop()
+        autoStopTask?.cancel()
         recordingStartedAt = nil
         level = 0
         partialTranscript = ""
@@ -226,15 +278,17 @@ final class DictationSession {
         }
     }
 
-    private func fail(_ message: String) {
+    private func fail(_ message: String, gen: Int) {
+        guard gen == generation else { return }
         audio.stop()
+        autoStopTask?.cancel()
         recordingStartedAt = nil
         level = 0
         state = .failed(message)
         logger.error("Session failed: \(message, privacy: .public)")
         failureReset = Task { [weak self] in
             try? await Task.sleep(for: Self.failureDisplayDuration)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, self?.state == .failed(message) else { return }
             self?.partialTranscript = ""
             self?.state = .idle
         }
