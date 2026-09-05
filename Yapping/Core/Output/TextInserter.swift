@@ -22,10 +22,14 @@ struct PasteboardTextInserter: TextInserting {
 
         Self.postCommandV()
 
-        try await Task.sleep(for: restoreDelay)
-        // Only restore if nobody else touched the pasteboard in the meantime.
-        if pasteboard.changeCount == ourChangeCount {
-            snapshot.restore(to: pasteboard)
+        // Restore the previous clipboard later, off the critical path, and only if nobody
+        // else touched the pasteboard in the meantime.
+        let delay = restoreDelay
+        Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            if pasteboard.changeCount == ourChangeCount {
+                snapshot.restore(to: pasteboard)
+            }
         }
     }
 

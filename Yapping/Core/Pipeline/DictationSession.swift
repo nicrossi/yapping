@@ -32,6 +32,9 @@ final class DictationSession {
     private(set) var level: Float = 0
     /// Loudest level seen during the current recording; used to tell "silence" from "no speech".
     private var peakLevel: Float = 0
+    /// Most recent levels, oldest first, for the scrolling waveform. Fixed length.
+    private(set) var levelHistory: [Float] = Array(repeating: 0, count: DictationSession.historyLength)
+    static let historyLength = 24
     /// Live transcript preview while recording/transcribing.
     private(set) var partialTranscript = ""
     private(set) var lastInsertedText = ""
@@ -46,6 +49,7 @@ final class DictationSession {
     private var pipeline: Task<Void, Never>?
     private var failureReset: Task<Void, Never>?
     private var recordingStartedAt: ContinuousClock.Instant?
+    private var releasedAt: ContinuousClock.Instant?
     private let logger = Logger(subsystem: "com.nicorossi.yapping", category: "session")
 
     /// Presses shorter than this are treated as accidental taps.
@@ -70,6 +74,8 @@ final class DictationSession {
                 guard let self else { return }
                 level = value
                 peakLevel = max(peakLevel, value)
+                levelHistory.removeFirst()
+                levelHistory.append(value)
             }
         }
     }
@@ -98,15 +104,19 @@ final class DictationSession {
         partialTranscript = ""
         level = 0
         peakLevel = 0
+        levelHistory = Array(repeating: 0, count: Self.historyLength)
         recordingStartedAt = .now
 
         let engine = self.engine
         pipeline = Task { [weak self] in
             guard let self else { return }
             do {
-                try await engine.prepare()
+                let pressedAt = ContinuousClock.now
+                // Mic first so the user's first word isn't lost; prepare() is a no-op once warmed.
                 let stream = try audio.start()
                 state = .recording
+                let captureDelay = ContinuousClock.now - pressedAt
+                try await engine.prepare()
 
                 var finalText = ""
                 for try await update in engine.transcribe(stream) {
@@ -117,6 +127,8 @@ final class DictationSession {
                     }
                 }
                 try Task.checkCancellation()
+                let finalAt = ContinuousClock.now
+                let finalizeDelay = releasedAt.map { finalAt - $0 }
 
                 let text = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else {
@@ -133,11 +145,15 @@ final class DictationSession {
                 state = .processing
                 let processed = await runProcessor(on: text)
                 try Task.checkCancellation()
+                let processedAt = ContinuousClock.now
 
                 state = .inserting
                 try await inserter.insert(processed)
+                let insertedAt = ContinuousClock.now
                 lastInsertedText = processed
-                logger.notice("Inserted \(processed.count, privacy: .public) chars")
+                logger.notice(
+                    "Inserted \(processed.count, privacy: .public) chars · capture-start \(Self.ms(captureDelay), privacy: .public)ms · release→final \(Self.ms(finalizeDelay), privacy: .public)ms · cleanup \(Self.ms(processedAt - finalAt), privacy: .public)ms · insert \(Self.ms(insertedAt - processedAt), privacy: .public)ms · release→pasted \(Self.ms(self.releasedAt.map { insertedAt - $0 }), privacy: .public)ms"
+                )
                 celebrate()
             } catch is CancellationError {
                 finish()
@@ -157,6 +173,7 @@ final class DictationSession {
             return
         }
         guard state == .recording else { return }
+        releasedAt = .now
         state = .transcribing
         audio.stop()  // ends the audio stream → engine finalizes
     }
@@ -169,6 +186,11 @@ final class DictationSession {
     }
 
     // MARK: - Private
+
+    private static func ms(_ d: Duration?) -> Int {
+        guard let d else { return -1 }
+        return Int(d / .milliseconds(1))
+    }
 
     private func runProcessor(on text: String) async -> String {
         guard await processor.isAvailable() else { return text }

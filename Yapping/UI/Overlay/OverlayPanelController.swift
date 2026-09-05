@@ -11,8 +11,8 @@ final class OverlayPanelController {
     private var hideTask: Task<Void, Never>?
     private var orderOutTask: Task<Void, Never>?
 
-    // Extra room around the 44pt pill so scale/offset transitions never clip.
-    private static let size = NSSize(width: 380, height: 72)
+    // Extra room around the pill so scale/offset transitions never clip.
+    private static let size = NSSize(width: 200, height: 64)
     private static let bottomMargin: CGFloat = 88
     /// Slightly longer than `Motion.exit` so the fade completes before the window disappears.
     private static let orderOutDelay: Duration = .milliseconds(140)

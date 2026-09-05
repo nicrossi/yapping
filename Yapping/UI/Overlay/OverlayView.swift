@@ -7,6 +7,7 @@ final class OverlayPresentation {
     var isVisible = false
 }
 
+/// Minimal pill: a dark capsule holding only the waveform. No text, no icons.
 struct OverlayView: View {
     @Environment(DictationSession.self) private var session
     @Environment(OverlayPresentation.self) private var presentation
@@ -18,7 +19,7 @@ struct OverlayView: View {
             .scaleEffect(scale, anchor: .bottom)
             .offset(y: reduceMotion || presentation.isVisible ? 0 : 6)
             .animation(presentation.isVisible ? Motion.enter : Motion.exit, value: presentation.isVisible)
-            .padding(10)
+            .padding(8)
     }
 
     private var scale: CGFloat {
@@ -27,117 +28,21 @@ struct OverlayView: View {
     }
 
     private var pill: some View {
-        HStack(spacing: 10) {
-            statusIcon
-                .frame(width: 18, height: 18)
-                .contentTransition(.symbolEffect(.replace.downUp.byLayer))
-
-            ZStack(alignment: .leading) {
-                Text(caption)
-                    .id(captionIdentity)
-                    .transition(reduceMotion ? AnyTransition.opacity : AnyTransition(.blurReplace))
-            }
-            .font(.system(size: 13, weight: .medium))
-            .lineLimit(1)
-            .truncationMode(.head)
-            .foregroundStyle(captionColor)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(Motion.swap, value: captionIdentity)
-
-            trailing
-                .frame(width: 26, height: 20)
-        }
-        .padding(.leading, 14)
-        .padding(.trailing, 12)
-        .frame(height: 44)
-        .background(.regularMaterial, in: Capsule())
-        .overlay {
-            Capsule()
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [.white.opacity(0.28), .white.opacity(0.06)],
-                        startPoint: .top, endPoint: .bottom
-                    ),
-                    lineWidth: 0.5
-                )
-        }
-        .shadow(color: .black.opacity(0.18), radius: 14, y: 8)
-        .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
-        .animation(Motion.swap, value: session.state)
+        Waveform(levels: session.levelHistory, mode: mode, reduceMotion: reduceMotion)
+            .frame(width: 120, height: 24)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color(white: 0.09).opacity(0.92), in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.10), lineWidth: 1))
     }
 
-    // MARK: Pieces
-
-    @ViewBuilder
-    private var statusIcon: some View {
+    private var mode: Waveform.Mode {
         switch session.state {
-        case .recording:
-            Image(systemName: "mic.fill")
-                .foregroundStyle(Brand.gradient)
-        case .transcribing, .processing, .inserting:
-            Image(systemName: "sparkles")
-                .foregroundStyle(Brand.gradient)
-                .symbolEffect(.variableColor.iterative.dimInactiveLayers, options: .repeating)
-        case .done:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(Brand.gradient)
-        case .failed:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-        case .idle:
-            Image(systemName: "waveform")
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private var trailing: some View {
-        switch session.state {
-        case .recording:
-            LevelBars(level: session.level)
-                .transition(.opacity)
-        case .transcribing, .processing, .inserting:
-            ProgressView()
-                .controlSize(.small)
-                .transition(.opacity)
-        default:
-            Color.clear
-        }
-    }
-
-    private var caption: String {
-        switch session.state {
-        case .recording:
-            session.partialTranscript.isEmpty ? Copy.listening : session.partialTranscript
-        case .transcribing:
-            session.partialTranscript.isEmpty ? Copy.transcribing : session.partialTranscript
-        case .processing: Copy.processing
-        case .inserting: Copy.inserting
-        case .done: Copy.done
-        case .failed(let message): message
-        case .idle: ""
-        }
-    }
-
-    /// Only *kinds* of caption crossfade; live transcript words update in place with no animation.
-    private var captionIdentity: String {
-        switch session.state {
-        case .recording, .transcribing:
-            session.partialTranscript.isEmpty ? "waiting" : "transcript"
-        case .processing: "processing"
-        case .inserting: "inserting"
-        case .done: "done"
-        case .failed: "failed"
-        case .idle: "idle"
-        }
-    }
-
-    private var captionColor: Color {
-        switch session.state {
-        case .failed: .orange
-        case .recording where session.partialTranscript.isEmpty: .secondary
-        case .transcribing where session.partialTranscript.isEmpty: .secondary
-        default: .primary
+        case .recording: .live
+        case .transcribing, .processing, .inserting: .thinking
+        case .done: .done
+        case .failed: .failed
+        case .idle: .idle
         }
     }
 }
@@ -151,29 +56,58 @@ enum Motion {
     static let level = Animation.spring(duration: 0.12, bounce: 0)
 }
 
-/// Five bars that follow the input level. Center bars react most; outer bars lag behind.
-struct LevelBars: View {
-    let level: Float
-    private let weights: [Float] = [0.5, 0.8, 1.0, 0.8, 0.5]
+/// Scrolling bar waveform. In `.live` the bars mirror the last ~2.4 s of mic level (newest on the right).
+/// In `.thinking` they breathe with a slow travelling wave. `.done` collapses to a flat line; `.failed` goes orange.
+struct Waveform: View {
+    enum Mode: Equatable { case idle, live, thinking, done, failed }
+
+    let levels: [Float]
+    let mode: Mode
+    var reduceMotion = false
+
+    private let barWidth: CGFloat = 2.5
+    private let minHeight: CGFloat = 3
 
     var body: some View {
-        HStack(alignment: .center, spacing: 3) {
-            ForEach(weights.indices, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(Brand.gradientHorizontal)
-                    .frame(width: 3, height: height(for: i))
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: mode != .thinking || reduceMotion)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .center, spacing: barWidth) {
+                ForEach(levels.indices, id: \.self) { i in
+                    Capsule(style: .continuous)
+                        .fill(fill)
+                        .frame(width: barWidth, height: height(at: i, time: t))
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(height: 20)
-        .animation(Motion.level, value: level)
+        .animation(mode == .live ? Motion.level : Motion.swap, value: levels)
+        .animation(Motion.swap, value: mode)
     }
 
-    private func height(for index: Int) -> CGFloat {
-        let floor: CGFloat = 3
-        let range: CGFloat = 17
-        // Slight curve so quiet speech still reads as movement.
-        let shaped = pow(CGFloat(level), 0.7)
-        return floor + shaped * CGFloat(weights[index]) * range
+    private var fill: AnyShapeStyle {
+        switch mode {
+        case .failed: AnyShapeStyle(Color.orange)
+        case .idle: AnyShapeStyle(Color.white.opacity(0.35))
+        default: AnyShapeStyle(Brand.gradientHorizontal)
+        }
+    }
+
+    private func height(at i: Int, time: Double) -> CGFloat {
+        let maxHeight: CGFloat = 24
+        switch mode {
+        case .live:
+            // Perceptual curve so quiet speech still reads as movement.
+            let shaped = pow(CGFloat(levels[i]), 0.65)
+            return minHeight + shaped * (maxHeight - minHeight)
+        case .thinking:
+            if reduceMotion { return minHeight + 4 }
+            // Slow travelling sine, small amplitude.
+            let phase = time * 2.2 - Double(i) * 0.45
+            let wave = (sin(phase) + 1) / 2  // 0...1
+            return minHeight + CGFloat(wave) * 7
+        case .done, .idle, .failed:
+            return minHeight
+        }
     }
 }
 

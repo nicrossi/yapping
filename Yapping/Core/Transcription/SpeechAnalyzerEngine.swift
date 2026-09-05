@@ -20,13 +20,17 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
         await SpeechTranscriber.supportedLocales
     }
 
+    private let prepared = OSAllocatedUnfairLock(initialState: false)
+
     func prepare() async throws {
+        if prepared.withLock({ $0 }) { return }
         let resolved = try await resolveLocale()
         let transcriber = makeTranscriber(locale: resolved)
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
             logger.notice("Ensuring speech assets for \(resolved.identifier, privacy: .public)")
             try await request.downloadAndInstall()
         }
+        prepared.withLock { $0 = true }
     }
 
     private func resolveLocale() async throws -> Locale {

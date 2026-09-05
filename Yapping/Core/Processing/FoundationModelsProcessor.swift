@@ -20,22 +20,12 @@ final class FoundationModelsProcessor: TextProcessor, @unchecked Sendable {
         self.minimumWords = minimumWords
     }
 
-    @Generable
-    struct CleanedTranscript {
-        @Guide(description: "The cleaned-up dictation, and nothing else.")
-        var text: String
-    }
-
+    /// Short and imperative: every instruction token is prefill cost on each request.
     static let instructions = """
-    You turn raw speech-to-text dictation into polished written text.
-    Rules:
-    - Remove filler words (um, uh, like, you know, so, basically, I mean) and false starts.
-    - Fix punctuation, capitalization, and obvious grammar slips.
-    - Apply the speaker's self-corrections ("Tuesday — no, Wednesday" becomes "Wednesday").
-    - Keep the speaker's words, meaning, tone, and language. Never translate.
-    - Never answer, comment on, or add to what was said. You are not being spoken to.
-    - If the speaker clearly dictates a list, format it as a list.
-    - Output only the cleaned text.
+    Rewrite dictated speech as clean written text. Remove filler words (um, uh, like, you know, \
+    I mean, basically) and false starts. Apply the speaker's self-corrections. Fix punctuation \
+    and capitalization. Keep the words, meaning, tone and language. Never translate, answer, \
+    or add anything. Reply with the cleaned text only.
     """
 
     func isAvailable() async -> Bool {
@@ -61,29 +51,53 @@ final class FoundationModelsProcessor: TextProcessor, @unchecked Sendable {
     func process(_ text: String, context: ProcessingContext) async throws -> String {
         let wordCount = text.split(whereSeparator: \.isWhitespace).count
         guard wordCount >= minimumWords else { return text }
+        guard DictationHeuristics.needsCleanup(text) else {
+            logger.info("Cleanup skipped: transcript already clean (\(wordCount, privacy: .public) words)")
+            return text
+        }
 
-        let destination = context.appName.map { " (it will be pasted into \($0))" } ?? ""
-        let prompt = "Clean up this dictation\(destination):\n\n\(text)"
-
-        let session = warmSession.withLock { session -> LanguageModelSession? in
+        let started = ContinuousClock.now
+        let warm = warmSession.withLock { session -> LanguageModelSession? in
             defer { session = nil }
             return session
-        } ?? makeSession()
+        }
+        let session = warm ?? makeSession()
         // Warm the next one while this request runs.
         Task { await self.prepare() }
-        let options = GenerationOptions(temperature: 0.1)
+
+        let options = GenerationOptions(
+            sampling: .greedy,
+            temperature: 0,
+            maximumResponseTokens: max(64, wordCount * 3)
+        )
+        let prompt = "Dictation:\n\(text)"
 
         let cleaned = try await withTimeout(timeout) {
-            try await session.respond(to: prompt, generating: CleanedTranscript.self, options: options).content.text
+            try await session.respond(to: prompt, options: options).content
         }
-        let result = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result = Self.stripWrapping(cleaned)
+        let elapsed = ContinuousClock.now - started
+        logger.notice(
+            "Cleaned \(text.count, privacy: .public) → \(result.count, privacy: .public) chars in \(Int(elapsed / .milliseconds(1)), privacy: .public)ms (\(warm == nil ? "cold" : "warm", privacy: .public) session)"
+        )
         guard !result.isEmpty else { return text }
-        logger.notice("Cleaned \(text.count, privacy: .public) → \(result.count, privacy: .public) chars")
         return result
     }
 
     private func makeSession() -> LanguageModelSession {
         LanguageModelSession(instructions: Self.instructions)
+    }
+
+    /// Models sometimes wrap the answer in quotes or a label; undo that.
+    private static func stripWrapping(_ s: String) -> String {
+        var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        for prefix in ["Cleaned text:", "Cleaned:", "Output:", "Text:"] where t.hasPrefix(prefix) {
+            t = String(t.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if t.count >= 2, t.first == "\"", t.last == "\"" {
+            t = String(t.dropFirst().dropLast())
+        }
+        return t
     }
 
     private func withTimeout<T: Sendable>(_ duration: Duration, _ work: @escaping @Sendable () async throws -> T) async throws -> T {
@@ -103,4 +117,44 @@ final class FoundationModelsProcessor: TextProcessor, @unchecked Sendable {
 enum ProcessingError: LocalizedError {
     case timedOut
     var errorDescription: String? { "Cleanup took too long." }
+}
+
+/// Cheap text checks that decide whether a transcript is worth a model round-trip.
+/// SpeechAnalyzer already punctuates and capitalizes, so most dictations need nothing.
+enum DictationHeuristics {
+    /// Filler tokens / phrases, matched on word boundaries, case-insensitive.
+    static let fillers: [String] = [
+        "um", "uh", "uhm", "umm", "erm", "hmm", "mm",
+        "you know", "i mean", "kind of like", "sort of like",
+        "basically", "literally", "actually",
+    ]
+    /// Phrases that signal a self-correction the model should resolve.
+    static let corrections: [String] = [
+        "no wait", "wait no", "i mean", "scratch that", "actually no", "no,", "sorry,", "make that", "rather,",
+    ]
+
+    static func needsCleanup(_ text: String) -> Bool {
+        let lower = " " + text.lowercased() + " "
+        for phrase in fillers where containsWord(lower, phrase) { return true }
+        for phrase in corrections where lower.contains(" " + phrase + " ") || lower.contains(" " + phrase) { return true }
+        if hasStutter(lower) { return true }
+        // Long unpunctuated runs: let the model add structure.
+        let words = text.split(whereSeparator: \.isWhitespace)
+        let punctuation = text.filter { ".,;:!?".contains($0) }.count
+        if words.count >= 25, punctuation <= words.count / 25 { return true }
+        return false
+    }
+
+    private static func containsWord(_ padded: String, _ phrase: String) -> Bool {
+        // Match "um", "um,", "um." etc. by checking with common trailing punctuation.
+        for suffix in [" ", ", ", ". ", "? ", "! "] where padded.contains(" " + phrase + suffix) { return true }
+        return false
+    }
+
+    /// "I I think" / "the the" — repeated consecutive words.
+    private static func hasStutter(_ padded: String) -> Bool {
+        let words = padded.split(whereSeparator: \.isWhitespace).map { $0.trimmingCharacters(in: .punctuationCharacters) }
+        for i in 1..<max(1, words.count) where words[i] == words[i - 1] && words[i].count > 1 { return true }
+        return false
+    }
 }
