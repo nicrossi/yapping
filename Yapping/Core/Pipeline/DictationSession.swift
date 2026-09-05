@@ -53,7 +53,7 @@ final class DictationSession {
     static let failureDisplayDuration: Duration = .seconds(2.5)
     static let doneDisplayDuration: Duration = .milliseconds(650)
     /// Peak level (0...1) below which a recording is considered dead silence.
-    static let silenceThreshold: Float = 0.02
+    static let silenceThreshold: Float = 0.15  // ≈ -42 dBFS; real speech peaks 0.4+
 
     init(
         audio: AudioCapture,
