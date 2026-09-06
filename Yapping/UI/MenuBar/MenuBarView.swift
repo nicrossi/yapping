@@ -21,6 +21,14 @@ struct MenuBarView: View {
                 }
                 .pickerStyle(.menu)
                 .font(.callout)
+                Picker("Language", selection: $settings.localeIdentifier) {
+                    Text("System (\(appState.resolvedLanguageName))").tag(String?.none)
+                    ForEach(appState.availableLocales, id: \.self) { id in
+                        Text(Locale(identifier: id).localizedLanguageName).tag(String?.some(id))
+                    }
+                }
+                .pickerStyle(.menu)
+                .font(.callout)
             } else {
                 PermissionsChecklist()
             }
