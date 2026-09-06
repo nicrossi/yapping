@@ -83,6 +83,7 @@ final class AppState {
     func applySettings() {
         session.engine = engine(for: settings.engineID)
         session.processor = processor(for: settings.processorID)
+        hotkey.secondaryKey = settings.pushToTalkSecondary
         warmUpTask?.cancel()
         engineReadiness = .loading
         warmUpTask = Task { [weak self] in

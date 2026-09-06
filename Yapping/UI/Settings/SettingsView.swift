@@ -32,10 +32,19 @@ struct SettingsView: View {
                         Text(engine.displayName).tag(engine)
                     }
                 }
+                Picker("Also trigger with", selection: $settings.pushToTalkSecondary) {
+                    Text("Nothing (Fn only)").tag(PushToTalkKey?.none)
+                    ForEach(PushToTalkKey.allCases) { key in
+                        Text(key.displayName).tag(PushToTalkKey?.some(key))
+                    }
+                }
             } header: {
                 Text("Dictation")
             } footer: {
-                Text("Speech is recognized on-device in the selected language. Apple offers regional variants only; pick the closest.")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Speech is recognized on-device in the selected language. Apple offers regional variants only; pick the closest.")
+                    Text("Holding **Fn** always starts dictation. To use another keyboard, map a key to one of the triggers above. F13–F19 are safest; a modifier like Right Option also types accents, so it starts dictation whenever you use it. On QMK, map the key to e.g. `KC_F13`.")
+                }
             }
             Section {
                 Picker("Cleanup", selection: $settings.processorID) {

@@ -3,20 +3,30 @@ import ApplicationServices
 import CoreGraphics
 import os
 
-/// Watches the Fn key globally and reports press/release.
+/// Watches push-to-talk keys globally and reports press/release. Fn is always a trigger; an
+/// optional secondary key (see `PushToTalkKey`) can be added for keyboards without a usable Fn,
+/// such as a QMK mechanical keyboard mapped to F13.
 ///
-/// The CGEventTap runs on a dedicated high-priority thread with its own run loop, never the
-/// main run loop. This is deliberate: a listen-only tap on the main run loop gets starved
-/// whenever the main thread is busy (SwiftUI layout, audio engine start/stop, model work),
-/// and macOS then disables it by timeout — dropping the Fn-release that fires during the stall
-/// and leaving a recording running forever. A dedicated thread keeps event delivery immune to
-/// UI work. Requires Accessibility trust.
+/// The CGEventTap runs on a dedicated high-priority thread with its own run loop, never the main
+/// run loop. A listen-only tap on the main run loop gets starved whenever the main thread is busy
+/// (SwiftUI layout, audio engine start/stop, model work), and macOS then disables it by timeout,
+/// dropping the release event and leaving a recording running forever. A dedicated thread keeps
+/// event delivery immune to UI work. Requires Accessibility trust.
 @MainActor
 final class HotkeyMonitor {
     enum Event: Sendable { case pressed, released }
 
     var onEvent: ((Event) -> Void)?
     private(set) var isRunning = false
+
+    /// Extra trigger beyond Fn. Setting it while running restarts the tap (the event mask depends
+    /// on whether the key is a modifier or a function key).
+    var secondaryKey: PushToTalkKey? {
+        didSet {
+            guard oldValue != secondaryKey, isRunning else { return }
+            restart()
+        }
+    }
 
     private var tapThread: HotkeyTapThread?
     private let logger = Logger(subsystem: "com.nicorossi.yapping", category: "hotkey")
@@ -35,14 +45,14 @@ final class HotkeyMonitor {
                 MainActor.assumeIsolated { self?.onEvent?(event) }
             }
         }
-        let thread = HotkeyTapThread(handler: handler)
+        let thread = HotkeyTapThread(secondaryKey: secondaryKey, handler: handler)
         guard thread.startAndWaitUntilReady() else {
             logger.error("CGEventTap creation failed (Accessibility revoked?)")
             return false
         }
         tapThread = thread
         isRunning = true
-        logger.notice("Fn hotkey tap started")
+        logger.notice("Hotkey tap started (Fn + \(self.secondaryKey?.displayName ?? "none", privacy: .public))")
         return true
     }
 
@@ -51,23 +61,31 @@ final class HotkeyMonitor {
         tapThread = nil
         isRunning = false
     }
+
+    private func restart() {
+        stop()
+        start()
+    }
 }
 
-/// Owns the CGEventTap and its run loop on a private thread. Not main-actor isolated:
-/// `fnIsDown` is touched only from the tap callback (its own thread), and `handler` hops to main.
+/// Owns the CGEventTap and its run loop on a private thread. Not main-actor isolated: the tracker
+/// is touched only from the tap callback (its own thread), and `handler` hops to main.
 private final class HotkeyTapThread: @unchecked Sendable {
     private let handler: @Sendable (HotkeyMonitor.Event) -> Void
+    private let secondaryKey: PushToTalkKey?
     private var thread: Thread?
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var runLoop: CFRunLoop?
-    private var fnIsDown = false
+    private var tracker = TriggerTracker()
     private var didCreateTap = false
     private let ready = DispatchSemaphore(value: 0)
 
+    /// Fn is always a trigger. Its keycode; matched with `.maskSecondaryFn`.
     private static let fnKeyCode: Int64 = 63
 
-    init(handler: @escaping @Sendable (HotkeyMonitor.Event) -> Void) {
+    init(secondaryKey: PushToTalkKey?, handler: @escaping @Sendable (HotkeyMonitor.Event) -> Void) {
+        self.secondaryKey = secondaryKey
         self.handler = handler
     }
 
@@ -87,14 +105,22 @@ private final class HotkeyTapThread: @unchecked Sendable {
         if let runLoop { CFRunLoopStop(runLoop) }
     }
 
+    private var eventMask: CGEventMask {
+        var mask: CGEventMask = 1 << CGEventType.flagsChanged.rawValue
+        // A function-key trigger arrives as key events, not flag changes.
+        if let key = secondaryKey, !key.isModifier {
+            mask |= (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+        }
+        return mask
+    }
+
     private func threadMain() {
-        let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
         let userInfo = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .listenOnly,   // we never modify Fn; listen-only can't add input latency
-            eventsOfInterest: mask,
+            options: .listenOnly,   // we never modify the key; listen-only can't add input latency
+            eventsOfInterest: eventMask,
             callback: hotkeyTapCallback,
             userInfo: userInfo
         ) else {
@@ -127,20 +153,37 @@ private final class HotkeyTapThread: @unchecked Sendable {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-            // A disable while the key is held almost certainly means we lost the release.
-            // End the gesture rather than let a recording run forever.
-            if fnIsDown {
-                fnIsDown = false
-                handler(.released)
-            }
+            // A disable while a key is held almost certainly means we lost the release.
+            emit(tracker.reset())
         case .flagsChanged:
-            guard keyCode == Self.fnKeyCode else { return }
-            let down = flags.contains(.maskSecondaryFn)
-            guard down != fnIsDown else { return }
-            fnIsDown = down
-            handler(down ? .pressed : .released)
+            // Fn (always) and any modifier secondary are seen here.
+            if keyCode == Self.fnKeyCode {
+                edge(keyCode: keyCode, down: flags.contains(.maskSecondaryFn))
+            } else if let key = secondaryKey, key.isModifier, keyCode == key.keyCode, let bit = key.modifierFlag {
+                edge(keyCode: keyCode, down: flags.contains(bit))
+            }
+        case .keyDown:
+            if let key = secondaryKey, !key.isModifier, keyCode == key.keyCode {
+                emit(tracker.keyDown(keyCode))  // autorepeat is absorbed by the set
+            }
+        case .keyUp:
+            if let key = secondaryKey, !key.isModifier, keyCode == key.keyCode {
+                emit(tracker.keyUp(keyCode))
+            }
         default:
             break
+        }
+    }
+
+    private func edge(keyCode: Int64, down: Bool) {
+        emit(down ? tracker.keyDown(keyCode) : tracker.keyUp(keyCode))
+    }
+
+    private func emit(_ edge: TriggerTracker.Edge?) {
+        switch edge {
+        case .pressed: handler(.pressed)
+        case .released: handler(.released)
+        case nil: break
         }
     }
 }

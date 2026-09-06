@@ -9,6 +9,7 @@ final class AppSettings {
         static let engine = "engine"
         static let processor = "processor"
         static let locale = "localeIdentifier"
+        static let secondary = "pushToTalkSecondary"
     }
 
     static let defaultLocaleIdentifier = "en-US"
@@ -28,6 +29,11 @@ final class AppSettings {
         didSet { persist(localeIdentifier, Key.locale) }
     }
 
+    /// Extra push-to-talk key beyond the always-on Fn, or `nil` for Fn only.
+    var pushToTalkSecondary: PushToTalkKey? {
+        didSet { persist(pushToTalkSecondary?.rawValue, Key.secondary) }
+    }
+
     var preferredLocale: Locale {
         localeIdentifier.map { Locale(identifier: $0) } ?? .current
     }
@@ -39,6 +45,7 @@ final class AppSettings {
         engineID = defaults.string(forKey: Key.engine).flatMap(EngineID.init(rawValue:)) ?? .speechAnalyzer
         processorID = defaults.string(forKey: Key.processor).flatMap(ProcessorID.init(rawValue:)) ?? .quick
         localeIdentifier = defaults.string(forKey: Key.locale) ?? Self.defaultLocaleIdentifier
+        pushToTalkSecondary = defaults.string(forKey: Key.secondary).flatMap(PushToTalkKey.init(rawValue:))
     }
 
     private func persist(_ value: String?, _ key: String) {
