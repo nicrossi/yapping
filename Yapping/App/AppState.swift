@@ -96,12 +96,10 @@ final class AppState {
     func loadAvailableLocales() async {
         let supported = await SpeechAnalyzerEngine.supportedLocales()
         let installed = await SpeechAnalyzerEngine.installedLocales()
-        // Only surface the languages this user cares about: English and Spanish variants.
-        let shown: Set<String> = ["en", "es"]
-        availableLocales = supported
-            .filter { shown.contains($0.language.languageCode?.identifier ?? "") }
-            .map { $0.identifier(.bcp47) }
-            .sorted { Locale(identifier: $0).localizedLanguageName < Locale(identifier: $1).localizedLanguageName }
+        // Only the three languages this user dictates in.
+        let shown = ["en-US", "es-MX", "es-CL"]
+        let supportedIDs = Set(supported.map { $0.identifier(.bcp47) })
+        availableLocales = shown.filter(supportedIDs.contains)
         installedLocales = Set(installed.map { $0.identifier(.bcp47) })
     }
 
