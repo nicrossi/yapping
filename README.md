@@ -8,15 +8,24 @@
 
 Everything runs on your Mac. No account, no network, no telemetry. It is a local-first take on Wispr Flow: the same hold-a-key-and-talk loop, but the audio never leaves the machine.
 
-Everything runs on your Mac. No account, no network, no telemetry. It is a local-first take on Wispr Flow: the same hold-a-key-and-talk loop, but the audio never leaves the machine.
-
 ## How it works
 
-1. You hold Fn. A small pill appears at the bottom of the screen with a waveform that follows your voice.
+1. You hold the push-to-talk key (Fn by default). A small pill appears at the bottom of the screen with a waveform that follows your voice.
 2. You talk. Apple's on-device speech model transcribes as you go.
 3. You release. Yapping cleans up the text and pastes it into the focused app, then puts your old clipboard back.
 
 Release to paste takes about 200 ms for a short phrase. The cleanup step is what varies, see [Cleanup](#cleanup) below.
+
+## Push-to-talk key
+
+Fn is the default trigger, and it always works on the built-in keyboard. You can add a second key in Settings for a keyboard that has no usable Fn, such as an external mechanical one.
+
+A QMK layer key will not work as the trigger. It switches layers inside the keyboard firmware and sends nothing to macOS, so Yapping never sees it. macOS also treats Fn as a vendor-specific key that QMK cannot emit. So instead of chasing Fn, map a QMK key to one of these and pick it under Settings, Also trigger with:
+
+- **F13 through F19.** The safest choice. They type nothing and have no default action in macOS, so they only ever start dictation. In QMK, map a key to `KC_F13`.
+- **Right Control, Option, Command, or Shift.** These work too, but they also do their normal job, so the modifier fires dictation whenever you use it in a shortcut. On a US layout, Right Option types accents, so skip it there. On a Spanish or Latin American layout accents come from the dedicated dead key instead, which leaves Right Option free.
+
+Both triggers stay live at once. Hold Fn on the laptop or your mapped key on the mechanical keyboard, whichever you are on. Holding both and letting go of one keeps recording until the last key comes up.
 
 ## Requirements
 
@@ -24,7 +33,7 @@ Release to paste takes about 200 ms for a short phrase. The cleanup step is what
 - Xcode 26 and [XcodeGen](https://github.com/yonaskolb/XcodeGen) to build.
 - Two permissions on first launch: Accessibility and Microphone.
 
-Accessibility is not optional. Yapping watches the Fn key with a global event tap and pastes with a synthetic Command-V, and macOS gates both behind that permission. The menu has a checklist with buttons that jump straight to the right System Settings pane.
+Accessibility is not optional. Yapping watches the push-to-talk key with a global event tap and pastes with a synthetic Command-V, and macOS gates both behind that permission. The menu has a checklist with buttons that jump straight to the right System Settings pane.
 
 ## Build and run
 
@@ -66,7 +75,7 @@ Quick cleanup is the default for a reason. The language model produced better pr
 One push-to-talk cycle runs through a small pipeline:
 
 ```
-Fn down → HotkeyMonitor → DictationSession
+key down → HotkeyMonitor → DictationSession
                               ├─ AudioCapture         (mic → level-metered buffer stream)
                               ├─ TranscriptionEngine  (SpeechAnalyzer | Parakeet)
                               ├─ TextProcessor        (Quick | Apple Intelligence | Raw)
@@ -75,7 +84,7 @@ Fn down → HotkeyMonitor → DictationSession
 
 `DictationSession` is an actor-like `@MainActor` state machine that owns the cycle. A few decisions worth calling out:
 
-- **The Fn tap runs on its own thread.** A `CGEventTap` on the main run loop gets starved whenever the main thread is busy with layout or audio work, and macOS then disables it by timeout. When that happened mid-press, the release event was dropped and the recording ran forever. One 68-second runaway is what sent me looking. The tap now lives on a dedicated high-priority thread and is listen-only, so UI work cannot delay it. If it is ever disabled while Fn is held, it fires a synthetic release so a recording cannot hang. A 150-second cap is the last resort.
+- **The hotkey tap runs on its own thread.** A `CGEventTap` on the main run loop gets starved whenever the main thread is busy with layout or audio work, and macOS then disables it by timeout. When that happened mid-press, the release event was dropped and the recording ran forever. One 68-second runaway is what sent me looking. The tap now lives on a dedicated high-priority thread and is listen-only, so UI work cannot delay it. If it is ever disabled while a key is held, it fires a synthetic release so a recording cannot hang. A 150-second cap is the last resort.
 - **Overlapping presses queue instead of cancelling.** Press again while the previous phrase is still finalizing and the old one still finishes and pastes, while the new recording starts right away. A generation counter decides which recording owns the UI and the mic.
 - **Engines and processors are protocols.** `TranscriptionEngine` and `TextProcessor` each have a couple of implementations behind them, so adding a cloud engine or a different cleanup backend later means writing one type, not touching the pipeline.
 
