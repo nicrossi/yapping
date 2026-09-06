@@ -16,18 +16,29 @@ struct MenuBarView: View {
                     Image(systemName: "hand.tap")
                 }
                 .foregroundStyle(.secondary)
-                Picker("Cleanup", selection: $settings.processorID) {
-                    ForEach(ProcessorID.allCases) { Text($0.displayName).tag($0) }
-                }
-                .pickerStyle(.menu)
-                .font(.callout)
-                Picker("Language", selection: $settings.localeIdentifier) {
-                    Text("System (\(appState.resolvedLanguageName))").tag(String?.none)
-                    ForEach(appState.availableLocales, id: \.self) { id in
-                        Text(Locale(identifier: id).localizedLanguageName).tag(String?.some(id))
+                // Grid keeps the labels in one column and the controls in another, so both
+                // pickers start and end at the same x.
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                    GridRow {
+                        Text("Cleanup").gridColumnAlignment(.leading)
+                        Picker("Cleanup", selection: $settings.processorID) {
+                            ForEach(ProcessorID.allCases) { Text($0.displayName).tag($0) }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity)
+                    }
+                    GridRow {
+                        Text("Language")
+                        Picker("Language", selection: $settings.localeIdentifier) {
+                            Text("System (\(appState.resolvedLanguageName))").tag(String?.none)
+                            ForEach(appState.availableLocales, id: \.self) { id in
+                                Text(Locale(identifier: id).localizedLanguageName).tag(String?.some(id))
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity)
                     }
                 }
-                .pickerStyle(.menu)
                 .font(.callout)
             } else {
                 PermissionsChecklist()
