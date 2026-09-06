@@ -14,7 +14,7 @@ Everything runs on your Mac. No account, no network, no telemetry. It is a local
 2. You talk. Apple's on-device speech model transcribes as you go.
 3. You release. Yapping cleans up the text and pastes it into the focused app, then puts your old clipboard back.
 
-Release to paste takes about 200 ms for a short phrase. The cleanup step is what varies, see [Cleanup](#cleanup) below.
+Release to paste takes about 200 ms for a short phrase. The cleanup step varies. See [Cleanup](#cleanup) below.
 
 ## Push-to-talk key
 
@@ -65,10 +65,10 @@ The raw transcript passes through one of three processors before it gets pasted.
 | Mode | Speed | What it does |
 |---|---|---|
 | Quick cleanup (default) | under 5 ms | Drops filler words like "um" and "uh", collapses stutters, fixes punctuation and capitalization. Rules, no model. |
-| Apple Intelligence | a few seconds on an M1 | Runs the on-device language model to rewrite the text. It skips the call entirely when the transcript already looks clean. |
+| Apple Intelligence | a few seconds on an M1 | Runs the on-device language model to rewrite the text. It skips the call when the transcript already looks clean. |
 | Raw transcript | none | Exactly what the speech engine heard. |
 
-Quick cleanup is the default for a reason. The language model produced better prose on messy input, but it cost about 7.5 seconds per phrase on my M1 and changed nothing most of the time. Rules cover the common case in microseconds, so the language model is there for when you want it, not on the hot path.
+Quick cleanup is the default. The language model produced better prose on messy input, but it cost about 7.5 seconds per phrase on my M1 and changed nothing most of the time. Rules cover the common case in microseconds, so the language model is there for when you want it, not on the hot path.
 
 ## Architecture
 
