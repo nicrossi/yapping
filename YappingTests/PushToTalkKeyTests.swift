@@ -12,7 +12,7 @@ struct PushToTalkKeyTests {
     }
 
     @Test func functionKeysHaveNoFlag() {
-        for key in [PushToTalkKey.f13, .f14, .f15, .f16, .f17, .f18, .f19] {
+        for key in [PushToTalkKey.f1, .f2, .f3, .f4, .f5] {
             #expect(key.modifierFlag == nil)
             #expect(!key.isModifier)
         }
@@ -41,16 +41,16 @@ struct TriggerTrackerTests {
     @Test func overlappingTriggersStayPressedUntilLastRelease() {
         var t = TriggerTracker()
         #expect(t.keyDown(63) == .pressed)   // Fn down
-        #expect(t.keyDown(105) == nil)       // F13 down while Fn held: no new press
-        #expect(t.keyUp(63) == nil)          // Fn up but F13 still held: no release
-        #expect(t.keyUp(105) == .released)   // last key up
+        #expect(t.keyDown(122) == nil)       // F1 down while Fn held: no new press
+        #expect(t.keyUp(63) == nil)          // Fn up but F1 still held: no release
+        #expect(t.keyUp(122) == .released)   // last key up
     }
 
     @Test func autorepeatDownIsAbsorbed() {
         var t = TriggerTracker()
-        #expect(t.keyDown(105) == .pressed)
-        #expect(t.keyDown(105) == nil)       // repeat
-        #expect(t.keyUp(105) == .released)
+        #expect(t.keyDown(122) == .pressed)
+        #expect(t.keyDown(122) == nil)       // repeat
+        #expect(t.keyUp(122) == .released)
     }
 
     @Test func unknownKeyUpIsIgnored() {

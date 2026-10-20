@@ -43,7 +43,7 @@ struct SettingsView: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Speech is recognized on-device in the selected language. Apple offers regional variants only; pick the closest.")
-                    Text("Holding **Fn** always starts dictation. To use another keyboard, map a key to one of the triggers above. F13–F19 are safest; a modifier like Right Option also types accents, so it starts dictation whenever you use it. On QMK, map the key to e.g. `KC_F13`.")
+                    Text("Holding **Fn** always starts dictation. To use another keyboard, map a key to one of the triggers above. F1–F5 work best when the keyboard sends them as standard function keys; a modifier like Right Option also types accents, so it starts dictation whenever you use it. On QMK, map the key to e.g. `KC_F1`.")
                 }
             }
             Section {

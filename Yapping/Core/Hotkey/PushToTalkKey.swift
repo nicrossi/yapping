@@ -4,7 +4,7 @@ import CoreGraphics
 /// Only keys that type no character and have a clean hold/release are offered.
 enum PushToTalkKey: String, CaseIterable, Codable, Sendable, Identifiable {
     case rightControl, rightOption, rightCommand, rightShift
-    case f13, f14, f15, f16, f17, f18, f19
+    case f1, f2, f3, f4, f5
 
     var id: String { rawValue }
 
@@ -15,13 +15,11 @@ enum PushToTalkKey: String, CaseIterable, Codable, Sendable, Identifiable {
         case .rightShift: 60
         case .rightOption: 61
         case .rightControl: 62
-        case .f13: 105
-        case .f14: 107
-        case .f15: 113
-        case .f16: 106
-        case .f17: 64
-        case .f18: 79
-        case .f19: 80
+        case .f1: 122
+        case .f2: 120
+        case .f3: 99
+        case .f4: 118
+        case .f5: 96
         }
     }
 
@@ -32,7 +30,7 @@ enum PushToTalkKey: String, CaseIterable, Codable, Sendable, Identifiable {
         case .rightOption: .maskAlternate
         case .rightCommand: .maskCommand
         case .rightShift: .maskShift
-        case .f13, .f14, .f15, .f16, .f17, .f18, .f19: nil
+        case .f1, .f2, .f3, .f4, .f5: nil
         }
     }
 
@@ -45,13 +43,11 @@ enum PushToTalkKey: String, CaseIterable, Codable, Sendable, Identifiable {
         case .rightOption: "Right Option"
         case .rightCommand: "Right Command"
         case .rightShift: "Right Shift"
-        case .f13: "F13"
-        case .f14: "F14"
-        case .f15: "F15"
-        case .f16: "F16"
-        case .f17: "F17"
-        case .f18: "F18"
-        case .f19: "F19"
+        case .f1: "F1"
+        case .f2: "F2"
+        case .f3: "F3"
+        case .f4: "F4"
+        case .f5: "F5"
         }
     }
 }

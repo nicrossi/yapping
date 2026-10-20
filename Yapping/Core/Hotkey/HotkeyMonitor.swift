@@ -5,7 +5,7 @@ import os
 
 /// Watches push-to-talk keys globally and reports press/release. Fn is always a trigger; an
 /// optional secondary key (see `PushToTalkKey`) can be added for keyboards without a usable Fn,
-/// such as a QMK mechanical keyboard mapped to F13.
+/// such as a QMK mechanical keyboard mapped to F1.
 ///
 /// The CGEventTap runs on a dedicated high-priority thread with its own run loop, never the main
 /// run loop. A listen-only tap on the main run loop gets starved whenever the main thread is busy
