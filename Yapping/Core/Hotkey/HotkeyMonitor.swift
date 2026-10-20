@@ -119,7 +119,9 @@ private final class HotkeyTapThread: @unchecked Sendable {
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .listenOnly,   // we never modify the key; listen-only can't add input latency
+            // Active, not listen-only: a function-key trigger must be swallowed, or the focused app
+            // gets an F-key it doesn't handle and macOS beeps (once per autorepeat) into the mic.
+            options: .defaultTap,
             eventsOfInterest: eventMask,
             callback: hotkeyTapCallback,
             userInfo: userInfo
@@ -148,8 +150,9 @@ private final class HotkeyTapThread: @unchecked Sendable {
         self.runLoop = nil
     }
 
-    /// Runs on the tap thread.
-    fileprivate func handle(type: CGEventType, keyCode: Int64, flags: CGEventFlags) {
+    /// Runs on the tap thread. Returns `true` when the event should be swallowed: only a
+    /// function-key trigger. Fn and modifier triggers pass through so shortcuts keep working.
+    fileprivate func handle(type: CGEventType, keyCode: Int64, flags: CGEventFlags) -> Bool {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
@@ -165,14 +168,17 @@ private final class HotkeyTapThread: @unchecked Sendable {
         case .keyDown:
             if let key = secondaryKey, !key.isModifier, keyCode == key.keyCode {
                 emit(tracker.keyDown(keyCode))  // autorepeat is absorbed by the set
+                return true
             }
         case .keyUp:
             if let key = secondaryKey, !key.isModifier, keyCode == key.keyCode {
                 emit(tracker.keyUp(keyCode))
+                return true
             }
         default:
             break
         }
+        return false
     }
 
     private func edge(keyCode: Int64, down: Bool) {
@@ -197,7 +203,8 @@ private func hotkeyTapCallback(
     if let userInfo {
         let thread = Unmanaged<HotkeyTapThread>.fromOpaque(userInfo).takeUnretainedValue()
         // Pull Sendable scalars out of the (non-Sendable) CGEvent before handing off.
-        thread.handle(type: type, keyCode: event.getIntegerValueField(.keyboardEventKeycode), flags: event.flags)
+        let swallow = thread.handle(type: type, keyCode: event.getIntegerValueField(.keyboardEventKeycode), flags: event.flags)
+        if swallow { return nil }
     }
-    return Unmanaged.passUnretained(event)  // ignored for listen-only taps
+    return Unmanaged.passUnretained(event)
 }

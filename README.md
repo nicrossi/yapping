@@ -22,7 +22,7 @@ Fn is the default trigger, and it always works on the built-in keyboard. You can
 
 A QMK layer key will not work as the trigger. It switches layers inside the keyboard firmware and sends nothing to macOS, so Yapping never sees it. macOS also treats Fn as a vendor-specific key that QMK cannot emit. So instead of chasing Fn, map a QMK key to one of these and pick it under Settings, Also trigger with:
 
-- **F1 through F5.** They type nothing, so they are a good fit. In QMK, map a key to `KC_F1`. On an Apple keyboard these keys control brightness and media by default and only send F1 to F5 with Fn held, or with "Use F1, F2, etc. keys as standard function keys" on in System Settings. Some apps also bind them, and Yapping lets the key through, so pick one your apps leave alone.
+- **F1 through F5.** They type nothing, so they are a good fit. In QMK, map a key to `KC_F1`. On an Apple keyboard these keys control brightness and media by default and only send F1 to F5 with Fn held, or with "Use F1, F2, etc. keys as standard function keys" on in System Settings. Yapping swallows the key while it is the trigger, so apps never see it and macOS plays no alert beep.
 - **Right Control, Option, Command, or Shift.** These work too, but they also do their normal job, so the modifier fires dictation whenever you use it in a shortcut. On a US layout, Right Option types accents, so skip it there. On a Spanish or Latin American layout accents come from the dedicated dead key instead, which leaves Right Option free.
 
 Both triggers stay live at once. Hold Fn on the laptop or your mapped key on the mechanical keyboard, whichever you are on. Holding both and letting go of one keeps recording until the last key comes up.
